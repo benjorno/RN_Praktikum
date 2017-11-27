@@ -1,6 +1,6 @@
 #include "client.h"
 
-#define LOCAL_PORT 15000
+#define LOCAL_PORT "1500"
 #define LOCAL_IP "141.22.27.106"
 char username[USERNAME_REAL_SIZE];
 char command[255];
@@ -71,7 +71,9 @@ void sendDiscoveryRequestTo(char* destinationIp, int destinationPort){
 	close(socketRequest);
 }
 
-void updatePeerList();
+void updatePeerList() {
+	//hier wird die liste mit den erreichbaren peers geupdated
+}
 
 void sendMessageTo(char* message, int destination_port, char *destination_ip, int length_message) {
 	send_msg_header header;
@@ -118,42 +120,10 @@ void sendMessageTo(char* message, int destination_port, char *destination_ip, in
 	close (create_socket);
 }
 
-void startLocalServer() {
-	struct sockaddr_in sa;
-	int res;
-	int SocketFD;
-
-	SocketFD = socket(AF_INET, SOCK_STREAM, 0); // Erstellen des Sockets.
-	if (SocketFD == -1) {
-		perror("socket");
-		fprintf(stderr, "ERROR: Es kann kein Socket erstellt werden.\n");
-		exit(EXIT_FAILURE);
-	}
-
-	memset(&sa, 0, sizeof(sa)); // Struktur Initialisieren.
-
-	sa.sin_family = AF_INET;
-	sa.sin_port = htons(LOCAL_PORT);
-
-	// Destination = Speicher ergebnis.
-	res = inet_pton(AF_INET, LOCAL_IP, &sa.sin_addr);
-	if (res < 0) {
-		perror("wrong ip");
-		fprintf(stderr,
-				"ERROR: Es kann keine Konvertierung durchgeführt werden.\n");
-		exit(EXIT_FAILURE);
-	}
-
-	//Connection zum Server aufbauen
-	if (connect(SocketFD, (struct sockaddr *) &sa, sizeof sa) == -1) {
-		perror("connect failed");
-		close(SocketFD);
-	}
-}
 
 /**
  * Behandeln der einkommenden Nachrichten vom Server.
- */
+
 void* messageHandlerMain(void * socket_fd_p) {
 	int socket_fd = *((int*) socket_fd_p);
 	send_msg_header header;
@@ -182,7 +152,7 @@ void* messageHandlerMain(void * socket_fd_p) {
 		}
 	}
 	return NULL;
-}
+}*/
 
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -192,8 +162,8 @@ void *get_in_addr(struct sockaddr *sa)
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
-void* messageHandlerMain2() {
-	 fd_set master;    // master file descriptor list
+void *startMultiChatServer() {
+	 	fd_set master;    // master file descriptor list
 	    fd_set read_fds;  // temp file descriptor list for select()
 	    int fdmax;        // maximum file descriptor number
 
@@ -343,60 +313,27 @@ int main(int argc, char **argv) {
 	getUsername();
 
 	/**
-	 * Starte lokalen "Server" um Nachrichten zu empfangen
-
-	struct sockaddr_in sa;
-	int res;
-	int socketLocal;
-	socketLocal = socket(AF_INET, SOCK_STREAM, 0); // Erstellen des Sockets.
-	if (socketLocal == -1) {
-		perror("socket");
-		fprintf(stderr, "ERROR: Es kann kein Socket erstellt werden.\n");
-		exit(EXIT_FAILURE);
-	}
-	memset(&sa, 0, sizeof(sa)); // Struktur Initialisieren.
-	sa.sin_family = AF_INET;
-	sa.sin_port = htons(LOCAL_PORT);
-	// Destination = Speicher ergebnis.
-	res = inet_pton(AF_INET, LOCAL_IP, &sa.sin_addr);
-	if (res < 0) {
-		perror("wrong ip");
-		fprintf(stderr, "ERROR: Es kann keine Konvertierung durchgeführt werden.\n");
-		exit(EXIT_FAILURE);
-	}
-	//Connection zum Server aufbauen
-	if (connect(socketLocal, (struct sockaddr *) &sa, sizeof sa) == -1) {
-		perror("connect failed");
-		close(socketLocal);
-	}*/
-
-	/**
-	**Thread starten um Nachrichten vom Server zu empfangen
+	**local multichat server starten
 	*/
-	pthread_t messageHandlerThread2;
-	int messageHandler = pthread_create(&messageHandlerThread2, NULL, messageHandlerMain2, 0);
-	if (messageHandler) {
-		printf("ERROR; return code from pthread_create() is %d\n", messageHandler);
-		//close(socketLocal);
-		exit(-1);
-	}
-	/*
-	pthread_t messageHandlerThread;
-	int* socketLocalServer = &socketLocal;
-	int messageHandler = pthread_create(&messageHandlerThread, NULL, messageHandlerMain, (void*) socketLocalServer);
-	if (messageHandler) {
-		printf("ERROR; return code from pthread_create() is %d\n", messageHandler);
-		close(socketLocal);
-		exit(-1);
-	}
-	*/
+	pthread_t multichatserver;
+    int multiChatter = pthread_create(&multichatserver, NULL, startMultiChatServer, 0);
+    if (multiChatter == 1) {
+    	printf("ERROR");
+    	exit(-1);
+    }else if(multiChatter == -1) {
+    	printf("-1");
+    }else if(multiChatter == 0) {
+    	printf("0");
+    }
+    //pthread_join(multichatserver,NULL);
+
 
 	/**
 	 * Benutzereingaben abfragen
 	 */
 	while (1) {
 		printf("Bitte geben sie einen Befehl ein: \n");
-		memset((void  *) &command, 0, 255 * sizeof(char));
+		memset((void  *) &command, 0, 10 * sizeof(char));
 		fgets(command, 255, stdin);
 		command[strcspn(command, "\n")] = 0;
 		if (strcasecmp(command, "/discovery") == 0) {
@@ -414,7 +351,8 @@ int main(int argc, char **argv) {
 			fgets(message, MAX_MESSAGE_SIZE, stdin);
 			username_dest[strcspn(username_dest, "\n")] = 0;
 			getIPFromUsername(username_dest);
-			sendMessageTo(message, LOCAL_PORT, argv[1], MAX_MESSAGE_SIZE);
+			//sendMessageTo(message, LOCAL_PORT, argv[1], MAX_MESSAGE_SIZE); //muss nochmal überarbeitet werden
+			sendDiscoveryRequestTo(argv[1],15000);
 		} else {
 			printf("Unbekannter Befehl \n");
 		}
