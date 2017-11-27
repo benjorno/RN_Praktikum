@@ -1,12 +1,15 @@
 #include "client.h"
 
-#define LOCAL_PORT "1500"
-#define LOCAL_IP "141.22.27.106"
+#define LOCAL_PORT "15001"
+//#define LOCAL_IP "141.22.27.106"
 char username[USERNAME_REAL_SIZE];
 char command[255];
 char username[USERNAME_REAL_SIZE];
 #define MAXBUFLEN 1024
-//initialisiere einen Discovery Request
+
+/**
+ * Sendet einen DiscoveryRequest an einen ausgewählten Peer.
+ */
 void sendDiscoveryRequestTo(char* destinationIp, int destinationPort){
 	int socketRequest;
 	struct sockaddr_in address;
@@ -67,6 +70,63 @@ void sendDiscoveryRequestTo(char* destinationIp, int destinationPort){
 	ssize_t bytes_send = send(socketRequest, (void*) &header, sizeof(discovery_header), 0);
 	if (bytes_send < 0) {
 		fprintf(stderr, "ERROR; Send \n");
+	} else if (bytes_send == 0) {
+		printf("keine daten");
+	}
+	//close(socketRequest);
+}
+
+/**
+ * Sendet eine Nachricht an einen ausgewählten Peer.
+ */
+void sendMessageTo(char *destinationIp, int destinationPort, char* message) {
+	int socketRequest;
+	struct sockaddr_in address;
+	int res;
+	//int size;
+
+	//anlegen eines Sockets
+	socketRequest = socket(AF_INET, SOCK_STREAM, 0);
+	if (socketRequest > 0) {
+		printf ("Socket wurde angelegt\n");
+	}else if (socketRequest == -1) {
+		perror("socketRequest");
+		fprintf(stderr, "ERROR: Es kann kein Socket erstellt werden.\n");
+		exit(EXIT_FAILURE);
+	}
+	memset(&address, 0, sizeof(address)); // Struktur Initialisieren.
+	address.sin_family = AF_INET;
+	address.sin_port = htons(destinationPort);
+	//inet_aton(destinationIp, &address.sin_addr);
+
+	//Destination = Speicher ergebnis.
+	//res = inet_pton(AF_INET, SERVER_IP, &address.sin_addr);
+	res = inet_pton(AF_INET, destinationIp, &address.sin_addr);
+	if (res < 0) {
+		perror("wrong ip");
+		fprintf(stderr, "ERROR: Es kann keine Konvertierung durchgeführt werden.\n");
+		exit(EXIT_FAILURE);
+	}
+	//mit server verbinden
+	if (connect(socketRequest, (struct sockaddr *) &address, sizeof(address)) == -1) {
+		perror("connect failed");
+		close(socketRequest);
+	}
+
+	//----------------------------------------------------------------------
+	//generieren des Headers
+	send_msg_header header;
+	memset((void *) &header, 0, sizeof(send_msg_header));
+	//peer_info peers;
+	//memset((void *) &peers, 0, sizeof(peer_info));
+
+	header.version = SUPPORTED_VERSION;
+	header.type = SEND_MSG;
+	header.length = MAX_MESSAGE_SIZE;
+	strcpy(header.user_message, message);
+	ssize_t bytes_send = send(socketRequest, (void*) &header, sizeof(send_msg_header), 0);
+	if (bytes_send < 0) {
+		fprintf(stderr, "ERROR; Send \n");
 	}
 	close(socketRequest);
 }
@@ -74,52 +134,6 @@ void sendDiscoveryRequestTo(char* destinationIp, int destinationPort){
 void updatePeerList() {
 	//hier wird die liste mit den erreichbaren peers geupdated
 }
-
-void sendMessageTo(char* message, int destination_port, char *destination_ip, int length_message) {
-	send_msg_header header;
-	memset((void *) &header, 0, sizeof(send_msg_header));
-
-	header.version = SUPPORTED_VERSION;
-	header.type = SEND_MSG;
-	header.length = MAX_MESSAGE_SIZE;
-
-	int create_socket;
-	struct sockaddr_in address;
-	//int size;
-
-	//anlegen eines Sockets
-	create_socket=socket(AF_INET, SOCK_STREAM, 0);
-	if (create_socket > 0)
-		printf ("Socket wurde angelegt\n");
-
-	address.sin_family = AF_INET;
-	address.sin_port = htons(destination_port);
-	inet_aton(destination_ip, &address.sin_addr);
-
-	//mit server verbinden
-	if (connect ( create_socket, (struct sockaddr *) &address, sizeof(address)) == 0)
-		printf ("Verbindung mit dem Server (%s) hergestellt\n", inet_ntoa(address.sin_addr));
-
-	//Nachricht senden
-	//ssize_t bytes_send = send(socket, (void*) &header, sizeof(discovery_header), 0);
-	char payload[MAX_MESSAGE_SIZE];
-	int max_message_size = length_message > MAX_MESSAGE_SIZE ? MAX_MESSAGE_SIZE :length_message;
-	snprintf(payload, max_message_size, "%s", message);
-
-	FILE *outstream = fdopen(create_socket, "w");
-
-	if (fwrite(&header, sizeof(send_msg_header), 1, outstream) != 1) {
-		perror("fwrite");
-		fprintf(stderr, "ERROR: Kann nicht zum Message stream schreiben. \n");
-	}
-	if (fwrite(&payload, sizeof(char) * max_message_size, 1, outstream) != 1) {
-		perror("fwrite");
-		fprintf(stderr, "ERROR: Kann nicht zum Message stream schreiben. \n");
-	}
-	fflush(outstream);
-	close (create_socket);
-}
-
 
 /**
  * Behandeln der einkommenden Nachrichten vom Server.
@@ -162,7 +176,11 @@ void *get_in_addr(struct sockaddr *sa)
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
-void *startMultiChatServer() {
+
+void handleReceive(){
+
+}
+void *startSocketForReceive() {
 	 	fd_set master;    // master file descriptor list
 	    fd_set read_fds;  // temp file descriptor list for select()
 	    int fdmax;        // maximum file descriptor number
@@ -257,16 +275,26 @@ void *startMultiChatServer() {
 	                        if (newfd > fdmax) {    // keep track of the max
 	                            fdmax = newfd;
 	                        }
-	                        printf("selectserver: new connection from %s on "
-	                            "socket %d\n",
-	                            inet_ntop(remoteaddr.ss_family,
-	                                get_in_addr((struct sockaddr*)&remoteaddr),
-	                                remoteIP, INET6_ADDRSTRLEN),
-	                            newfd);
+	                        printf("selectserver: new connection from %s on socket %d\n", inet_ntop(remoteaddr.ss_family,
+	                                get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN), newfd);
 	                    }
 	                } else {
 	                    // handle data from a client
-	                    if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
+	                	send_msg_header header;
+	                	ssize_t nbytes = recv(i, (void*) &header, sizeof(send_msg_header),0);
+	                    //if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
+	                	//----------------------------------------------------------------------------------------------- handle user messge
+	                	if(nbytes <= 0) {
+	                		if(header.version == SUPPORTED_VERSION) {
+	                			if(header.type == DISCOVERY_REQUEST) {
+	                				//update eigene Liste
+	                				//send Reply / gebe send reply in die queue
+	                			} else if (header.type == DISCOVERY_REPLY) {
+	                				//aktualisiere eigene tabelle
+	                			} else if (header.type == SEND_MSG) {
+	                				printf("\n new user message: %s \n",header.user_message);
+	                			}
+	                		}
 	                        // got error or connection closed by client
 	                        if (nbytes == 0) {
 	                            // connection closed
@@ -277,6 +305,7 @@ void *startMultiChatServer() {
 	                        close(i); // bye!
 	                        FD_CLR(i, &master); // remove from master set
 	                    } else {
+	                    	//---------------------------------------------------------------------------------- kann evt. raus
 	                        // we got some data from a client
 	                        for(j = 0; j <= fdmax; j++) {
 	                            // send to everyone!
@@ -296,19 +325,25 @@ void *startMultiChatServer() {
 	    } // END for(;;)--and you thought it would never end!
 }
 
-
-
-
+/**
+ * Frage den Username beim Start des Programms ab.
+ */
 void getUsername() {
     printf("Bitte geben Sie einen Benutzernamen ein: \n");
 	fgets(username, USERNAME_REAL_SIZE, stdin);
 	printf("Ihr Username ist: %s\n",username);
 }
 
+/**
+ * Sucht zum eingegebenen User die entsprechende IP heraus.
+ */
 void getIPFromUsername(char username[]) {
 	//hier wird der username in der Tabellegesucht und die entsprechende IP ermittelt, ggf. auch port
 }
 
+/**
+ * Hauptprogramm
+ */
 int main(int argc, char **argv) {
 	getUsername();
 
@@ -316,7 +351,7 @@ int main(int argc, char **argv) {
 	**local multichat server starten
 	*/
 	pthread_t multichatserver;
-    int multiChatter = pthread_create(&multichatserver, NULL, startMultiChatServer, 0);
+    int multiChatter = pthread_create(&multichatserver, NULL, startSocketForReceive, 0);
     if (multiChatter == 1) {
     	printf("ERROR");
     	exit(-1);
@@ -327,6 +362,7 @@ int main(int argc, char **argv) {
     }
     //pthread_join(multichatserver,NULL);
 
+    //baue verbindung zu einem Server auf und erfrage
 
 	/**
 	 * Benutzereingaben abfragen
@@ -351,8 +387,8 @@ int main(int argc, char **argv) {
 			fgets(message, MAX_MESSAGE_SIZE, stdin);
 			username_dest[strcspn(username_dest, "\n")] = 0;
 			getIPFromUsername(username_dest);
-			//sendMessageTo(message, LOCAL_PORT, argv[1], MAX_MESSAGE_SIZE); //muss nochmal überarbeitet werden
-			sendDiscoveryRequestTo(argv[1],15000);
+			sendMessageTo(argv[1], 15001, message); //muss nochmal überarbeitet werden
+			//sendDiscoveryRequestTo(argv[1],15001);
 		} else {
 			printf("Unbekannter Befehl \n");
 		}

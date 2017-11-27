@@ -24,7 +24,7 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-void *startMultiChatServer(){
+void *startSocketForReceive(){
     fd_set master;    // master file descriptor list
     fd_set read_fds;  // temp file descriptor list for select()
     int fdmax;        // maximum file descriptor number
@@ -162,7 +162,7 @@ int main(void)
 {
     printf("start");
     pthread_t multichatserver;
-    int multiChatter = pthread_create(&multichatserver, NULL, startMultiChatServer, 0);
+    int multiChatter = pthread_create(&multichatserver, NULL, startSocketForReceive, 0);
     if (multiChatter == 1) {
 	printf("ERROR");
 	exit(-1);
