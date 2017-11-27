@@ -14,6 +14,7 @@
 #include <netdb.h>
 #include <pthread.h>
 
+int getpeername(int s, struct sockaddr *addr, socklen_t *len);
 #define SUPPORTED_VERSION 1
 #define USERNAME_MAX_SIZE 64
 #define USERNAME_REAL_SIZE 63

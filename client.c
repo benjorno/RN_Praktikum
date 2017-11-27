@@ -73,7 +73,7 @@ void sendDiscoveryRequestTo(char* destinationIp, int destinationPort){
 	} else if (bytes_send == 0) {
 		printf("keine daten");
 	}
-	//close(socketRequest);
+	close(socketRequest);
 }
 
 /**
@@ -135,39 +135,6 @@ void updatePeerList() {
 	//hier wird die liste mit den erreichbaren peers geupdated
 }
 
-/**
- * Behandeln der einkommenden Nachrichten vom Server.
-
-void* messageHandlerMain(void * socket_fd_p) {
-	int socket_fd = *((int*) socket_fd_p);
-	send_msg_header header;
-	int flag = 1;
-	while (flag) {
-		memset((void *) &header, 0, sizeof(send_msg_header));
-
-		//Recieven des Headers
-		ssize_t numBytesRcvd = recv(socket_fd, (void*) &header, sizeof(send_msg_header), 0);
-		if (numBytesRcvd == 0) {
-			perror("No Connection");
-			fprintf(stderr, ": Der Server hat die Verbindung geschlossen.\n");
-			flag = 0;
-		}
-
-		if (header.version == SUPPORTED_VERSION) {
-			// Ausgabe der Message
-			if (header.type == SEND_MSG) {
-				printf("\nNeue Nachricht: %s \n", header.user_message);
-			} else if (header.type == DISCOVERY_REQUEST) {
-				//aktualisiere meine Liste
-				//merken von wem der Request kam und einen Reply erstellen und in die queue einreihen
-			}
-		} else {
-			printf("Der Header enthaelt die unbekannte Versionnummer %d \n", header.version);
-		}
-	}
-	return NULL;
-}*/
-
 void *get_in_addr(struct sockaddr *sa)
 {
     if (sa->sa_family == AF_INET) {
@@ -177,9 +144,18 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+void *get_in_port(struct sockaddr *sa) {
+	if(sa->sa_family == AF_INET) {
+		return &(((struct sockaddr_in*)sa)->sin_port);
+	}
+
+	return &(((struct sockaddr_in6*)sa)->sin6_port);
+}
+
 void handleReceive(){
 
 }
+
 void *startSocketForReceive() {
 	 	fd_set master;    // master file descriptor list
 	    fd_set read_fds;  // temp file descriptor list for select()
@@ -281,19 +257,43 @@ void *startSocketForReceive() {
 	                } else {
 	                    // handle data from a client
 	                	send_msg_header header;
-	                	ssize_t nbytes = recv(i, (void*) &header, sizeof(send_msg_header),0);
+	                	nbytes = recv(i, (void*) &header, sizeof(send_msg_header),0);
 	                    //if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
 	                	//----------------------------------------------------------------------------------------------- handle user messge
 	                	if(nbytes <= 0) {
 	                		if(header.version == SUPPORTED_VERSION) {
 	                			if(header.type == DISCOVERY_REQUEST) {
 	                				//update eigene Liste
-	                				//send Reply / gebe send reply in die queue
+	                				//ermittle socket daten
+	                				socklen_t len;
+	                				struct sockaddr_storage addr;
+	                				char ipstr[INET6_ADDRSTRLEN];
+	                				int port;
+	                				len = sizeof addr;
+	                				getpeername(i, (struct sockaddr*)&addr, &len);
+	                				// deal with both IPv4 and IPv6:
+	                				if (addr.ss_family == AF_INET) {
+	                				    struct sockaddr_in *s = (struct sockaddr_in *)&addr;
+	                				    port = ntohs(s->sin_port);
+	                				    inet_ntop(AF_INET, &s->sin_addr, ipstr, sizeof ipstr);
+	                				} else { // AF_INET6
+	                				    struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
+	                				    port = ntohs(s->sin6_port);
+	                				    inet_ntop(AF_INET6, &s->sin6_addr, ipstr, sizeof ipstr);
+	                				}
+
+	                				printf("Peer IP address: %s\n", ipstr);
+	                				printf("Peer port      : %d\n", port);
+	                				//gebe queue/workerthread die ip und port
+	                				//lass workerthread einen reply senden
 	                			} else if (header.type == DISCOVERY_REPLY) {
+	                				printf("\nhabe Reply erhalten\n");
 	                				//aktualisiere eigene tabelle
 	                			} else if (header.type == SEND_MSG) {
 	                				printf("\n new user message: %s \n",header.user_message);
 	                			}
+	                		} else {
+	                			printf("Paket mit unbekannter Versionsnummer");
 	                		}
 	                        // got error or connection closed by client
 	                        if (nbytes == 0) {
@@ -355,11 +355,7 @@ int main(int argc, char **argv) {
     if (multiChatter == 1) {
     	printf("ERROR");
     	exit(-1);
-    }else if(multiChatter == -1) {
-    	printf("-1");
-    }else if(multiChatter == 0) {
-    	printf("0");
-    }
+    };
     //pthread_join(multichatserver,NULL);
 
     //baue verbindung zu einem Server auf und erfrage
@@ -372,8 +368,9 @@ int main(int argc, char **argv) {
 		memset((void  *) &command, 0, 10 * sizeof(char));
 		fgets(command, 255, stdin);
 		command[strcspn(command, "\n")] = 0;
-		if (strcasecmp(command, "/discovery") == 0) {
+		if (strcasecmp(command, "/disco") == 0) {
 			//schicke discovery request
+			sendDiscoveryRequestTo(argv[1], 15001);
 		} else if (strcasecmp(command, "/exit") == 0) {
 			//userCloseConnection(SocketFD);
 			//logoutflag = LOGOUT;
