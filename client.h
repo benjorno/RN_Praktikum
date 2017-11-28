@@ -33,15 +33,12 @@ typedef struct {
 	struct peerList* firstPeer; //zeiger auf den nächsten peer_info
 } discovery_header;
 
-/*
-typedef struct {
-	uint32_t peer_address; //4Byte
-	uint8_t peer_port; 	//1Byte
-	char user_name[USERNAME_REAL_SIZE]; //64Byte
-	struct peer_info_header* next_peer;
-} peer_info_header;
-*/
-
+typedef struct send_msg_header{
+	uint8_t version;
+	uint8_t type;
+	uint16_t length;
+	char user_message[MAX_MESSAGE_SIZE]; //65536 Bytes - Headersize(4 Byte)
+} send_msg_header;
 
 typedef struct peerList {
 	uint32_t peerAddress; //4Byte
@@ -51,13 +48,13 @@ typedef struct peerList {
 	struct peerList* prevPeer;
 } peerList;
 
-
-typedef struct send_msg_header{
+typedef struct {
 	uint8_t version;
 	uint8_t type;
 	uint16_t length;
-	char user_message[MAX_MESSAGE_SIZE]; //65536 Bytes - Headersize(4 Byte)
-} send_msg_header;
+	char user_message[MAX_MESSAGE_SIZE];
+	struct peerList* firstPeer;
+} receive_header ;
 
 #endif /* Client_h */
 
