@@ -1,16 +1,16 @@
 #include "client.h"
-
-#define LOCAL_PORT "15001"
+#define LOCAL_PORT "15000"
 //#define LOCAL_IP "141.22.27.106"
 char username[USERNAME_REAL_SIZE];
 char command[255];
 char username[USERNAME_REAL_SIZE];
 #define MAXBUFLEN 1024
+struct peerList* peer;
 
 /**
  * Sendet einen DiscoveryRequest an einen ausgewählten Peer.
  */
-void sendDiscoveryRequestTo(char* destinationIp, int destinationPort){
+void sendToPeer(enum message_types type, char* destinationIp, int destinationPort){
 	int socketRequest;
 	struct sockaddr_in address;
 	int res;
@@ -53,20 +53,9 @@ void sendDiscoveryRequestTo(char* destinationIp, int destinationPort){
 	//memset((void *) &peers, 0, sizeof(peer_info));
 
 	header.version = SUPPORTED_VERSION;
-	header.type = DISCOVERY_REQUEST;
+	header.type = type;
 	header.length = MAX_MESSAGE_SIZE;
-
-	/*
-	 * Informationen über die bisherigen Peers werden hier eingetragen.
-	 * Informationen werden aus der Klasse PeerList.c entnommen.
-	 *
-	for(;;){
-		peers.peer_address = ;
-		peers.peer_port = ;
-		peers.user_name = ;
-		peers.next_peer = ;
-	}
-	*/
+	header.firstPeer = peer;
 	ssize_t bytes_send = send(socketRequest, (void*) &header, sizeof(discovery_header), 0);
 	if (bytes_send < 0) {
 		fprintf(stderr, "ERROR; Send \n");
@@ -133,6 +122,7 @@ void sendMessageTo(char *destinationIp, int destinationPort, char* message) {
 
 void updatePeerList() {
 	//hier wird die liste mit den erreichbaren peers geupdated
+
 }
 
 void *get_in_addr(struct sockaddr *sa)
@@ -263,6 +253,11 @@ void *startSocketForReceive() {
 	                	if(nbytes <= 0) {
 	                		if(header.version == SUPPORTED_VERSION) {
 	                			if(header.type == DISCOVERY_REQUEST) {
+	                				//updatePeerList(&header);
+	                				if(peer->userName==NULL) {
+
+	                				};
+
 	                				//update eigene Liste
 	                				//ermittle socket daten
 	                				socklen_t len;
@@ -281,7 +276,8 @@ void *startSocketForReceive() {
 	                				    port = ntohs(s->sin6_port);
 	                				    inet_ntop(AF_INET6, &s->sin6_addr, ipstr, sizeof ipstr);
 	                				}
-
+	                				//ermittle empfängerport mit hilfe der ermittelten ip aus der peer list
+	                				//sendToPeer(DISCOVERY_REPLY,ipstr,port);
 	                				printf("Peer IP address: %s\n", ipstr);
 	                				printf("Peer port      : %d\n", port);
 	                				//gebe queue/workerthread die ip und port
@@ -370,7 +366,7 @@ int main(int argc, char **argv) {
 		command[strcspn(command, "\n")] = 0;
 		if (strcasecmp(command, "/disco") == 0) {
 			//schicke discovery request
-			sendDiscoveryRequestTo(argv[1], 15001);
+			sendToPeer(DISCOVERY_REQUEST ,argv[1], 15001);
 		} else if (strcasecmp(command, "/exit") == 0) {
 			//userCloseConnection(SocketFD);
 			//logoutflag = LOGOUT;
@@ -385,7 +381,6 @@ int main(int argc, char **argv) {
 			username_dest[strcspn(username_dest, "\n")] = 0;
 			getIPFromUsername(username_dest);
 			sendMessageTo(argv[1], 15001, message); //muss nochmal überarbeitet werden
-			//sendDiscoveryRequestTo(argv[1],15001);
 		} else {
 			printf("Unbekannter Befehl \n");
 		}
