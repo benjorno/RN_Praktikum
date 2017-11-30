@@ -20,11 +20,42 @@ int getpeername(int s, struct sockaddr *addr, socklen_t *len);
 #define USERNAME_REAL_SIZE 63
 #define MAX_MESSAGE_SIZE 65531
 #define PROTOCOL_VERSION 1
+
 enum message_types {
-	DISCOVERY_REQUEST = 128,
-	DISCOVERY_REPLY = 64,
-	SEND_MSG = 80
+	DISCOVERY_REQUEST = 1,
+	DISCOVERY_REPLY = 2,
+	SEND_MSG = 10
 };
+
+typedef struct {
+	uint8_t version;
+	uint8_t type;
+	uint16_t  length;
+} commonHeader;
+
+typedef struct {
+	commonHeader header;
+	char userMessage[MAX_MESSAGE_SIZE];
+} messageHeader;
+
+typedef struct peerInfo {
+	int address[16];
+	int port;
+	char username[USERNAME_MAX_SIZE];
+	struct peerInfo *prevPeer;
+	struct peerInfo *nextPeer;
+} peerInfo;
+
+typedef struct {
+	commonHeader header;
+	peerInfo *peers;
+} discoveryHeader;
+
+
+
+
+
+//------------------------------------------------------------------
 
 typedef struct {
 	uint8_t version;
@@ -41,11 +72,11 @@ typedef struct send_msg_header{
 } send_msg_header;
 
 typedef struct peerList {
-	uint32_t peerAddress; //4Byte
-	uint8_t peerPort; 	//1Byte
+	char peerAddress[16]; //4Byte
+	int peerPort; 	//1Byte
 	char userName[USERNAME_MAX_SIZE]; //64Byte
-	struct peerList* nextPeer;
-	struct peerList* prevPeer;
+	struct peerList *nextPeer;
+	struct peerList *prevPeer;
 } peerList;
 
 typedef struct {
