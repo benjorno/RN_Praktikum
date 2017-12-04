@@ -14,12 +14,12 @@
 #include <netdb.h>
 #include <pthread.h>
 
-int getpeername(int s, struct sockaddr *addr, socklen_t *len);
-
 #define PROTOCOL_VERSION 1
 #define MAX_SIZE_USERNAME 64
 #define MAX_MESSAGE_SIZE 65532
 #define MAX_SIZE_PEERS 10
+
+int getpeername(int s, struct sockaddr *addr, socklen_t *len);
 
 enum message_types {
 	DISCOVERY_REQUEST = 1,
