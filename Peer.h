@@ -39,8 +39,8 @@ typedef struct {
 } messageHeader;
 
 typedef struct peerInfo {
-	uint32_t address[16];
-	uint8_t port;
+	uint32_t address;
+	uint16_t port;
 	char username[MAX_SIZE_USERNAME];
 } peerInfo;
 
