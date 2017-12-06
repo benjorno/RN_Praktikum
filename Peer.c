@@ -1,8 +1,9 @@
 #include "Peer.h"
-#define LOCAL_PORT 15001
-#define LOCAL_PORT2 "15001"
+#define LOCAL_PORT 15000
+#define LOCAL_PORT2 "15000"
 #define DISCOVERY_REQUEST_SLEEP 4
-#define LOCAL_IP "141.22.27.103"
+//#define LOCAL_IP "141.22.27.103"
+#define LOCAL_IP "127.0.0.1"
 
 pthread_t receiverThread, discoveryThread;
 pthread_mutex_t mutex;
@@ -112,8 +113,6 @@ int openSocketAndConnect(uint32_t destinationIp, uint16_t destinationPort) {
  */
 void sendToPeer(enum message_types type, uint32_t destinationIp, uint16_t destinationPort, char* message){
 	int socketRequest = openSocketAndConnect(destinationIp, destinationPort);
-	printf("in senddiscoveryrequest");
-	fflush(stdout);
 	if(type == DISCOVERY_REQUEST || type == DISCOVERY_REPLY) {
 		discoveryHeader disco;
 		memset((void *) &disco, 0, sizeof(disco));
@@ -126,7 +125,8 @@ void sendToPeer(enum message_types type, uint32_t destinationIp, uint16_t destin
 		memset((void *) &header, 0, sizeof(header));
 		header.version = PROTOCOL_VERSION;
 		header.type = type;
-		header.length = htons(sizeof(peers[0])*peerCount + sizeof(header));
+		//header.length = htons(sizeof(peers[0])*peerCount + sizeof(header));
+		header.length = htons(sizeof(peers) + sizeof(header));
 		disco.header = header;
 		ssize_t bytes_send = send(socketRequest, (void*) &disco, ntohs(disco.header.length), 0);
 		if (bytes_send < 0 ) {
@@ -413,11 +413,11 @@ void getUserCommand() {
 
 		if (strcasecmp(command, "/info") == 0) {
 			int i;
+			printf("--------Erreichbare Peers------------\n");
 			for(i = 0; i < MAX_SIZE_PEERS; i++) {
-				printf("--------Erreichbare Peers------------");
-				printf("[%i] %s", i, peers[i].username);
-				printf("-------------------------------------");
+				printf("[%i] %s\n", i, peers[i].username);
 			}
+			printf("-------------------------------------");
 		} else if (strcasecmp(command, "/msg") == 0) {
 			char message[MAX_MESSAGE_SIZE];
 			printf("An wen wollen Sie eine Nachricht schicken? \n");
