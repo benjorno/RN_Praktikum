@@ -1,18 +1,19 @@
 #include "Peer.h"
-#define LOCAL_PORT 15000
-#define LOCAL_PORT2 "15000"
+#define LOCAL_PORT 15001
+#define LOCAL_PORT2 "15001"
 #define DISCOVERY_REQUEST_SLEEP 4
-
-char localIp[16];
-char username[MAX_SIZE_USERNAME];
-char command[255];
-char ip[16];
-int port;
-
-struct peerInfo peers[MAX_SIZE_PEERS];
+#define LOCAL_IP "141.22.27.103"
 
 pthread_t receiverThread, discoveryThread;
 pthread_mutex_t mutex;
+
+uint16_t discoveryRequestPort;
+uint32_t discoveryRequestIP;
+
+char username[MAX_SIZE_USERNAME];
+int peerCount = 0;
+
+struct peerInfo peers[MAX_SIZE_PEERS];
 
 /**
  * Vergleicht zwei Peerlisten miteinander. Fügt die Peers aus der übergebenen Liste
@@ -20,10 +21,13 @@ pthread_mutex_t mutex;
  */
 void updatePeerList(struct peerInfo receivedPeers[]) {
 	pthread_mutex_lock(&mutex);
-	for(int j = 0; j < MAX_SIZE_PEERS; j++) {
-		for(int i = 0; i < MAX_SIZE_PEERS; i++) {
+	int i = 0;
+	int j = 0;
+	for(j = 0; j < MAX_SIZE_PEERS; j++) {
+		for(i = 0; i < MAX_SIZE_PEERS; i++) {
 			if(strlen(peers[i].username) == 0 && receivedPeers[j].username != NULL) {
-				strcpy(peers[i].username,receivedPeers[j].username);
+				peers[i] = receivedPeers[j];
+				peerCount++;
 				break;
 			} else {
 				int compareUsername = strcmp(peers[i].username,receivedPeers[j].username);
@@ -39,31 +43,47 @@ void updatePeerList(struct peerInfo receivedPeers[]) {
 /**
  * Findet anhand des Usernamens die entsprechende IP.
  */
-uint32_t getAddressByPeerName(char name[]) {
-	uint32_t address = 0;
-	for(int i = 0; i < MAX_SIZE_PEERS; i++) {
+void getPeerAddress(char name[], uint32_t *address) {
+	int i = 0;
+	for(i = 0; i < MAX_SIZE_PEERS; i++) {
 		if(strlen(peers[i].username) == 0) {
-			printf("Name nicht gefunden");
+			printf("\nName nicht gefunden!\n");
 			break;
 		}
 		int compareUsername = strcmp(peers[i].username, name);
 		if(compareUsername == 0) {
-			address = peers[i].address;
+			*address = peers[i].address;
+			return;
 		}
 	}
-	return address;
+	return;
+}
+
+void getPeerPort(char name[], uint16_t *port) {
+	int i = 0;
+	for(i = 0; i < MAX_SIZE_PEERS; i++) {
+		if(strlen(peers[i].username) == 0) {
+			break;
+		}
+		int compareUserport = strcmp(peers[i].username, name);
+		if(compareUserport == 0) {
+			*port = peers[i].port;
+			return;
+		}
+	}
+	return;
 }
 
 /**
  * Öffnet einen Socket und verbindet sich.
  */
-int openSocketAndConnect(char* destinationIp, int destinationPort) {
+int openSocketAndConnect(uint32_t destinationIp, uint16_t destinationPort) {
 	int socketRequest;
 	struct sockaddr_in address;
-	int res;
+//	int res;
 	socketRequest = socket(AF_INET, SOCK_STREAM, 0);
 	if (socketRequest > 0) {
-		//printf("Socket wurde angelegt\n");
+	//printf("Socket wurde angelegt\n");
 	} else if (socketRequest == -1) {
 		perror("socketRequest");
 		fprintf(stderr, "ERROR: Es kann kein Socket erstellt werden.\n");
@@ -71,39 +91,17 @@ int openSocketAndConnect(char* destinationIp, int destinationPort) {
 	}
 	memset(&address, 0, sizeof(address));
 	address.sin_family = AF_INET;
-	address.sin_port = htons(destinationPort);
-	res = inet_pton(AF_INET, destinationIp, &address.sin_addr);
-	if (res < 0) {
-		perror("wrong ip");
-		fprintf(stderr, "ERROR: Es kann keine Konvertierung durchgeführt werden.\n");
-		exit(EXIT_FAILURE);
-	}
+	address.sin_port = destinationPort;
+//	res = inet_pton(AF_INET, "141.22.27.108", &address.sin_addr);
+	address.sin_addr.s_addr = destinationIp;
+//	if (res < 0) {
+//		perror("wrong ip");
+//		fprintf(stderr, "ERROR: Es kann keine Konvertierung durchgeführt werden.\n");
+//		exit(EXIT_FAILURE);
+//	}
 	//mit server verbinden
 	if (connect(socketRequest, (struct sockaddr *) &address, sizeof(address))== -1) {
-		perror("connect failed");
-		close(socketRequest);
-	}
-	return socketRequest;
-}
-
-int openSocketAndConnect2(uint16_t destinationPort, uint32_t destinationIP) {
-	int socketRequest;
-	struct sockaddr_in address;
-	int res;
-	socketRequest = socket(AF_INET, SOCK_STREAM, 0);
-	if (socketRequest > 0) {
-
-	} else if (socketRequest  == -1) {
-		perror("socketRequest");
-		fprintf(stderr, "ERROR: Es kann kein Socket erstellt werden.\n");
-		exit(EXIT_FAILURE);
-	}
-	memset(&address, 0, sizeof(address));
-	address.sin_family = AF_INET;
-	address.sin_port = destinationPort;
-	address.sin_addr = destinationIP;
-	if (connect(socketRequest, (struct sockaddr *) &address, sizeof(address)) == -1) {
-		perror("connect failed");
+		perror("connect failed openandConnect");
 		close(socketRequest);
 	}
 	return socketRequest;
@@ -112,13 +110,15 @@ int openSocketAndConnect2(uint16_t destinationPort, uint32_t destinationIP) {
 /**
  * Sendet einen DiscoveryRequest an einen ausgewählten Peer.
  */
-void sendToPeer(enum message_types type, char* destinationIp, int destinationPort, char* message){
+void sendToPeer(enum message_types type, uint32_t destinationIp, uint16_t destinationPort, char* message){
 	int socketRequest = openSocketAndConnect(destinationIp, destinationPort);
-
+	printf("in senddiscoveryrequest");
+	fflush(stdout);
 	if(type == DISCOVERY_REQUEST || type == DISCOVERY_REPLY) {
 		discoveryHeader disco;
 		memset((void *) &disco, 0, sizeof(disco));
-		for(int i = 0; i < MAX_SIZE_PEERS; i++) {
+		int i = 0;
+		for(i = 0; i < MAX_SIZE_PEERS; i++) {
 			disco.peers[i] = peers[i];
 		}
 
@@ -126,9 +126,9 @@ void sendToPeer(enum message_types type, char* destinationIp, int destinationPor
 		memset((void *) &header, 0, sizeof(header));
 		header.version = PROTOCOL_VERSION;
 		header.type = type;
-		header.length = htons(sizeof(disco));
+		header.length = htons(sizeof(peers[0])*peerCount + sizeof(header));
 		disco.header = header;
-		ssize_t bytes_send = send(socketRequest, (void*) &disco, sizeof(disco),0);
+		ssize_t bytes_send = send(socketRequest, (void*) &disco, ntohs(disco.header.length), 0);
 		if (bytes_send < 0 ) {
 			fprintf(stderr, "ERROR; Send \n");
 		} else if (bytes_send == 0) {
@@ -142,10 +142,10 @@ void sendToPeer(enum message_types type, char* destinationIp, int destinationPor
 		memset((void *) &header, 0, sizeof(header));
 		header.version = PROTOCOL_VERSION;
 		header.type = type;
-		header.length = htons(sizeof(header));
+		header.length = htons(strlen(message) + 1 + sizeof(header));
 		messageHead.header = header;
-		ssize_t bytes_send = send(socketRequest, (void*) &messageHead, sizeof(messageHead), 0);
-		printf("Gesendete Bytes: %li \n",bytes_send);
+		ssize_t bytes_send = send(socketRequest, (void*) &messageHead, ntohs(messageHead.header.length), 0);
+		//printf("Gesendete Bytes: %li \n", bytes_send);
 		if (bytes_send < 0 ) {
 			fprintf(stderr, "ERROR; Send \n");
 		} else if (bytes_send == 0) {
@@ -170,11 +170,16 @@ void *get_in_addr(struct sockaddr *sa)
  */
 void *sendDiscoveryRequest() {
 	while(1) {
-		sendToPeer(DISCOVERY_REQUEST, ip, port, NULL);
+		sendToPeer(DISCOVERY_REQUEST, discoveryRequestIP, discoveryRequestPort, NULL);
 		sleep(DISCOVERY_REQUEST_SLEEP);
 	}
 }
 
+/**
+ * Überprüft die Header von empfangenen Nachrichten. Wenn eine Message empfangen wurde, wird diese
+ * auf der Konsole ausgegeben. Handelt es sich bei der empfangenen Nachricht um einen Discovery-Request,
+ * wird ein Discovery-Reply an den Sender zurückgeschickt.
+ */
 int checkReceivedMessage(int socket) {
   	commonHeader header;
   	int nbytes = recv(socket, (void *) &header, sizeof(header), 0);
@@ -191,22 +196,12 @@ int checkReceivedMessage(int socket) {
 			if(nBytesDiscovery > 0) {
 				printf("\nDiscovery von %s erhalten!\n", discovery.peers[0].username);
 				updatePeerList(discovery.peers);
-				printf("Peer 1 ist: %s \n", discovery.peers[0].username);
-				printf("Peer 2 ist: %s \n", discovery.peers[1].username);
-				printf("Peer 3 ist: %s \n", discovery.peers[2].username);
-				printf("Peer 4 ist: %s \n", discovery.peers[3].username);
-				printf("Peer 5 ist: %s \n", discovery.peers[4].username);
-				printf("Eigene Peer Liste \n");
-				printf("Peer 1 ist: %s \n", peers[0].username);
-				printf("Peer 2 ist: %s \n", peers[1].username);
-				printf("Peer 3 ist: %s \n", peers[2].username);
-				printf("Peer 4 ist: %s \n", peers[3].username);
-				printf("Peer 5 ist: %s \n", peers[4].username);
+				int i;
+				for(i = 0; i < MAX_SIZE_PEERS; i++) {
+					printf("Peer %i ist: %s \n",	i, discovery.peers[i].username);
+				}
 				if(header.type == DISCOVERY_REQUEST) {
-					sendToPeer(DISCOVERY_REPLY, ip, port, NULL);
-					//int = discovery.peers[0].address;
-					//char = discovery.peers[0].port;
-					//sendToPeer(DISCOVERY_REPLY,NULL);
+					sendToPeer(DISCOVERY_REPLY, discovery.peers[0].address, discovery.peers[0].port, NULL);
 				}
 			}
 		}
@@ -356,6 +351,9 @@ void *startSocketForReceive() {
     return 0;
 }
 
+/**
+ * Entfernt \n aus einem eingelesenen char array.
+ */
 void removeNewline(char *line) {
 	int newLine = strlen(line) -1;
 	if(line[newLine] == '\n')
@@ -364,7 +362,8 @@ void removeNewline(char *line) {
 
 /**
  * Fragt den Usernamen beim Start des Programms ab.
- */void getUsername() {
+ */
+void getUsername() {
     printf("Bitte geben Sie einen Benutzernamen ein: \n");
 	fgets(username, MAX_SIZE_USERNAME, stdin);
 	removeNewline(username);
@@ -375,11 +374,16 @@ void removeNewline(char *line) {
  */
 void getConnectionInfo() {
 	printf("Bitte geben Sie eine IP zum Verbinden ein: ");
+	char ip[16];
 	memset((void *) &ip, 0, 16 * sizeof(char));
 	fgets(ip, 17, stdin);
+	removeNewline(ip);
+	inet_pton(AF_INET, ip, &discoveryRequestIP);
+	int port;
 	//printf("Die eingegebene IP lautet %s", ip);
 	printf("\nBitte geben Sie einen Port zum Verbinden ein: ");
 	scanf("%i",&port);
+	discoveryRequestPort = htons(port);
 	//printf("\nDer eingegebene Port lautet %i", port);
 }
 
@@ -388,31 +392,49 @@ void getConnectionInfo() {
  * Ip und Port als erstes Element.
  */
 void initializePeerList() {
+	memset((void *) &peers, 0, sizeof(peers));
 	strcpy(peers[0].username, username);
 	peers[0].port = htons(LOCAL_PORT);
-	inet_pton(AF_INET, localIp, &peers[0].address);
+	inet_pton(AF_INET, LOCAL_IP, &peers[0].address);
+	peerCount++;
 }
 
+/**
+ * Beinhaltet eine Benutzereingabe um mit /info die Peer-Liste anzuzeigen,
+ * oder mit /msg eine Nachricht an einen Peer aus der Liste zu senden.
+ */
 void getUserCommand() {
 	while (1) {
 		printf("\nBitte geben sie einen Befehl ein: ");
+		char command[255];
 		memset((void  *) &command, 0, 255 * sizeof(char));
 		fgets(command, 255, stdin);
 		command[strcspn(command, "\n")] = 0;
-		if (strcasecmp(command, "/disco") == 0) {
-			//schicke discovery request
-			sendToPeer(DISCOVERY_REQUEST, ip, port, NULL);
+
+		if (strcasecmp(command, "/info") == 0) {
+			int i;
+			for(i = 0; i < MAX_SIZE_PEERS; i++) {
+				printf("--------Erreichbare Peers------------");
+				printf("[%i] %s", i, peers[i].username);
+				printf("-------------------------------------");
+			}
 		} else if (strcasecmp(command, "/msg") == 0) {
 			char message[MAX_MESSAGE_SIZE];
-			char username_dest[MAX_SIZE_USERNAME];
 			printf("An wen wollen Sie eine Nachricht schicken? \n");
-			fgets(username_dest, MAX_SIZE_USERNAME, stdin);
-			removeNewline(username_dest);
-			uint32_t destinationIP = getAddressByPeerName(username_dest);
+			char username[MAX_SIZE_USERNAME];
+			fgets(username, MAX_SIZE_USERNAME, stdin);
+			removeNewline(username);
+
+			uint32_t destinationIP;
+			getPeerAddress(username, &destinationIP);
+			uint16_t destinationPort;
+			getPeerPort(username, &destinationPort);
+
 			printf("\nGeben Sie bitte Ihre Nachricht ein: \n");
 			fgets(message, MAX_MESSAGE_SIZE, stdin);
-			username_dest[strcspn(username_dest, "\n")] = 0;
-			sendToPeer(SEND_MSG, ip, port, message);
+			username[strcspn(username, "\n")] = 0;
+
+			sendToPeer(SEND_MSG, destinationIP, destinationPort, message);
 		} else {
 			printf("Unbekannter Befehl.\n");
 		}
@@ -420,20 +442,15 @@ void getUserCommand() {
 }
 
 int main(int argc, char **argv) {
-	memset((void *) &peers, 0, sizeof(peers));
-
 	getUsername();
 	getConnectionInfo();
 	initializePeerList();
 
-	//strcpy(peers[1].username, "Klaus");
-	strcpy(peers[2].username, "Dieter Wasguckstduso");
-
-//	int disco = pthread_create(&discoveryThread, NULL, sendDiscoveryRequest, 0);
-//	if (disco == 1) {
-//		printf("ERROR");
-//		exit(-1);
-//	};
+	int disco = pthread_create(&discoveryThread, NULL, sendDiscoveryRequest, 0);
+	if (disco == 1) {
+		printf("ERROR");
+		exit(-1);
+	};
 
     int multiChatter = pthread_create(&receiverThread, NULL, startSocketForReceive, 0);
     if (multiChatter == 1) {

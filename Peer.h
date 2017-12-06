@@ -41,6 +41,7 @@ typedef struct {
 typedef struct peerInfo {
 	uint32_t address;
 	uint16_t port;
+	uint16_t reserved;
 	char username[MAX_SIZE_USERNAME];
 } peerInfo;
 
