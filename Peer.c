@@ -14,7 +14,7 @@ uint32_t discoveryRequestIP;
 char username[MAX_SIZE_USERNAME];
 int peerCount = 0;
 
-struct peerInfo peers[MAX_SIZE_PEERS];
+
 
 /**
  * Vergleicht zwei Peerlisten miteinander. Fügt die Peers aus der übergebenen Liste
