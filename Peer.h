@@ -21,7 +21,11 @@
 
 int getpeername(int s, struct sockaddr *addr, socklen_t *len);
 
-
+enum message_types {
+	DISCOVERY_REQUEST = 1,
+	DISCOVERY_REPLY = 2,
+	SEND_MSG = 10
+};
 
 typedef struct {
 	uint8_t version;
